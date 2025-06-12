@@ -109,5 +109,65 @@ http://127.0.0.1:8088/demologin?password=demo62996&username=demo
 
 You can apply changes above to the system.locations table to get the regions placed correctly on the map.
 
+Realistic latency
+-----------------
+
+cockroach demo movr --nodes 9 --global --with-load
+
+demo@127.0.0.1:26257/movr> select node_id, address, sql_address, locality from crdb_internal.gossip_nodes;
+  node_id |     address     |   sql_address   |         locality
+----------+-----------------+-----------------+---------------------------
+        1 | 127.0.0.1:26357 | 127.0.0.1:26257 | region=us-east1,az=b
+        2 | 127.0.0.1:26358 | 127.0.0.1:26258 | region=us-east1,az=c
+        3 | 127.0.0.1:26359 | 127.0.0.1:26259 | region=us-east1,az=d
+        4 | 127.0.0.1:26360 | 127.0.0.1:26260 | region=us-west1,az=a
+        5 | 127.0.0.1:26361 | 127.0.0.1:26261 | region=us-west1,az=b
+        6 | 127.0.0.1:26362 | 127.0.0.1:26262 | region=us-west1,az=c
+        7 | 127.0.0.1:26363 | 127.0.0.1:26263 | region=europe-west1,az=b
+        8 | 127.0.0.1:26364 | 127.0.0.1:26264 | region=europe-west1,az=c
+        9 | 127.0.0.1:26365 | 127.0.0.1:26265 | region=europe-west1,az=d
+(9 rows)
+
+Time: 69ms total (execution 68ms / network 1ms)
+
+demo@127.0.0.1:26257/movr> show locality;
+        locality
+------------------------
+  region=us-east1,az=b
+
+demo@127.0.0.1:26257/movr> show regions;
+     region    |  zones  | database_names | primary_region_of | secondary_region_of
+---------------+---------+----------------+-------------------+----------------------
+  europe-west1 | {b,c,d} | {}             | {}                | {}
+  us-east1     | {b,c,d} | {}             | {}                | {}
+  us-west1     | {a,b,c} | {}             | {}                | {}
+
+demo@127.0.0.1:26257/movr> show tables;
+  schema_name |         table_name         | type  | owner | estimated_row_count |              locality
+--------------+----------------------------+-------+-------+---------------------+--------------------------------------
+  public      | promo_codes                | table | demo  |                   0 | REGIONAL BY TABLE IN PRIMARY REGION
+  public      | rides                      | table | demo  |                 513 | REGIONAL BY TABLE IN PRIMARY REGION
+  public      | user_promo_codes           | table | demo  |                   0 | REGIONAL BY TABLE IN PRIMARY REGION
+  public      | users                      | table | demo  |                   0 | REGIONAL BY TABLE IN PRIMARY REGION
+  public      | vehicle_location_histories | table | demo  |                1295 | REGIONAL BY TABLE IN PRIMARY REGION
+  public      | vehicles                   | table | demo  |                   0 | REGIONAL BY TABLE IN PRIMARY REGION
+(6 rows)
+
+Time: 819ms total (execution 819ms / network 0ms)
+
+demo@127.0.0.1:26257/movr> select * from rides where id='0ee33848-6472-4463-963d-c78ced629dac';
+                   id                  |   city    | vehicle_city |               rider_id               |              vehicle_id              |   start_address    | end_address |         start_time         | end_time | revenue
+---------------------------------------+-----------+--------------+--------------------------------------+--------------------------------------+--------------------+-------------+----------------------------+----------+----------
+  0ee33848-6472-4463-963d-c78ced629dac | amsterdam | amsterdam    | 4d0b7ada-87fd-4aaf-9d72-c7d5df0a8a2b | aaaaaaaa-aaaa-4800-8000-00000000000a | 20936 Keith Branch | NULL        | 2025-06-12 17:02:46.933685 | NULL     |    2.00
+(1 row)
+
+Time: 708ms total (execution 707ms / network 0ms)
+
+demo@127.0.0.1:26257/movr> \demo shutdown 7
+ERROR: internal server error: shutting down nodes is not supported in --global configurations
+
+demo@127.0.0.1:26257/movr> \demo add region=us-east1,az=b
+ERROR: internal server error: adding nodes is not supported in --global configurations
+
 
 
